@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ebpf-manager
+  namespace: monitoring
+  labels:
+    app: ebpf-manager
+spec:
+  selector:
+    matchLabels:
+      app: ebpf-manager
+  template:
+    metadata:
+      labels:
+        app: ebpf-manager
+    spec:
+      hostNetwork: true  
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+      - name: ebpf-manager
+        image: awbrg789/ebpf-manager:latest  
+        imagePullPolicy: Always
+        securityContext:
+          privileged: true 
+          capabilities:
+            add:
+            - NET_ADMIN
+            - SYS_ADMIN
+            - SYS_RESOURCE
+        volumeMounts:
+        - name: bpf-fs
+          mountPath: /sys/fs/bpf
+        - name: debugfs
+          mountPath: /sys/kernel/debug
+        livenessProbe:
+          httpGet:
+            path: /stats
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+      volumes:
+      - name: bpf-fs
+        hostPath:
+          path: /sys/fs/bpf
+          type: DirectoryOrCreate
+      - name: debugfs
+        hostPath:
+          path: /sys/kernel/debug
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ebpf-manager
+  namespace: monitoring
+spec:
+  selector:
+    app: ebpf-manager
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
